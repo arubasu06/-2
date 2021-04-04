@@ -1,0 +1,92 @@
+from time import sleep
+import pandas as pd
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+import datetime
+
+# --> STEP0 : Chrome pathの設定
+chrome_path = r'C:\Users\kekec\Desktop\Python\01_MENTA課題\課題2\chromedriver.exe'
+LOG_FILE_PATH = "log_###DATETIME###.log"
+EXP_CSV_PATH="./exp_list_###SEARCH_KEYWORD###_###DATETIME###.csv"
+log_file_path=LOG_FILE_PATH.replace("###DATETIME###",datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S'))
+
+# --> STEP1 : ログファイルおよびコンソール出力設定
+def log(txt):
+    now=datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+    logStr = '[%s: %s] %s' % ('log',now , txt)
+    # ログ出力
+    with open(log_file_path, 'a', encoding='utf-8_sig') as f:
+        f.write(logStr + '\n')
+    print(logStr)
+
+# --> STEP2 : プログラミングで検索するmain処理の定義
+def main():
+    # --> STEP2-1 : ログ処理開始
+    log("処理開始")
+
+    # --> STEP2-2 : 自動アクセス設定
+    options=Options()
+    options.add_argument('--ignore-certificate-errors')
+    options.add_argument('--ignore-ssl-errors')
+    options.add_argument('--incognito')
+    # --> STEP2-3 ChromeのWebDriverオブジェクト作成
+    driver = webdriver.Chrome(executable_path=chrome_path, options=options)
+    # --> STEP2-4 対象URL記載
+    url = 'https://tenshoku.mynavi.jp/'
+    driver.get(url)
+    sleep(3)
+
+    # --> STEP2-5 : 検索キーワードの設定
+    query = input("キーワードを入力してください")
+    log("検索キーワード:{}".format(query))
+    search_box = driver.find_element_by_class_name('topSearch__text')
+    search_box.send_keys(query)
+    search_box.submit()
+    sleep(3)
+
+    # --> STEP2-6 : 必要な情報をリスト形式で取得
+    a_name_list = []
+    b_copy_list = []
+    c_location_list = []
+    count = 0
+    success = 0
+    fail = 0
+    # --> STEP2-7 : while文で繰り返し処理
+    while True:
+        # --> STEP2-8 : 各要素の定義
+        name_list = driver.find_elements_by_css_selector('.cassetteRecruit__content')
+        copy_list = driver.find_elements_by_css_selector('.cassetteRecruit__copy')
+        location_list = driver.find_elements_by_css_selector('.tableCondition__body')
+        
+        # --> STEP2-9 : 1ページ分繰り返し処理
+        for name, copy, location in zip(name_list, copy_list, location_list):
+            try:
+                a_name_list.append(name.text)
+                b_copy_list.append(copy.text)
+                c_location_list.append(location.text)
+                log("{}件目成功 : {}".format(count,name.text))
+                success+=1
+            except Exception as e:
+                log("{}件目失敗 : {}".format(count,name.text))
+                log(e)
+                fail+=1
+            finally:
+                count+=1
+        
+        # --> STEP2-10 : 次のページボタンがあればクリックなければ終了
+        next_page = driver.find_elements_by_class_name("iconFont--arrowLeft")
+        if len(next_page) >= 1:
+            next_page_link = next_page[0].get_attribute("href")
+            driver.get(next_page_link)
+        else:
+            log("最終ページです。終了します。")
+            break
+
+    # --> STEP2-11 : CSV出力設定
+    df = pd.DataFrame({"企業名":a_name_list,
+                       "キャッチコピー":b_copy_list,
+                       "勤務地":c_location_list})  
+    df.to_csv('求人情報.csv', encoding="utf-8-sig")
+
+if __name__ == "__main__":
+    main()
